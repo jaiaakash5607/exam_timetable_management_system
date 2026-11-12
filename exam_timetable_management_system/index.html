@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exam Time Table Management System</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Public+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Exam Time Table Management System</h1>
+  <p>Students find where and when they write. Staff schedule exams, and the system refuses clashes before they are saved.</p>
+</header>
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="find">Find my exam</button>
+  <button role="tab" aria-selected="false" data-tab="grid">Timetable</button>
+  <button role="tab" aria-selected="false" data-tab="list">All exams</button>
+  <button role="tab" aria-selected="false" data-tab="add">Schedule exam</button>
+</nav>
+<main>
+  <section id="find" class="panel">
+    <div class="find"><label>Register number <input id="roll" list="rolls" placeholder="Try RA2411003010001" autocomplete="off"></label><button class="btn" id="go">Show my exams</button></div>
+    <datalist id="rolls"></datalist>
+    <div id="result"></div>
+  </section>
+  <section id="grid" class="panel hidden"><div style="margin-bottom:12px"><label style="max-width:240px">Department <select id="fdept"></select></label></div><div class="scroll" id="gridbox"></div></section>
+  <section id="list" class="panel hidden"><div class="scroll"><table><thead><tr><th>Date</th><th>Slot</th><th>Course</th><th>Dept / Sem</th><th>Venue</th><th>Invigilator</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></section>
+  <section id="add" class="panel hidden">
+    <h2 style="font-size:20px;margin-bottom:14px">Schedule an exam</h2>
+    <form id="f">
+      <label>Course <select id="course"></select></label>
+      <label>Date <input type="date" id="date" value="2026-11-23" required></label>
+      <label>Slot <select id="slot"><option value="1">Slot 1 · 09:30–12:30</option><option value="2">Slot 2 · 14:00–17:00</option></select></label>
+      <label>Room <select id="room"></select></label>
+      <label>Invigilator <select id="inv"></select></label>
+      <button class="btn" type="submit">Save exam</button>
+    </form>
+    <div id="msg" role="status"></div>
+    <p style="color:var(--muted);margin-bottom:0">Saving also assigns seat numbers to the department’s students, so they can find them under Find my exam. Try Room A101 on 23 Nov in Slot 1: it is already taken.</p>
+  </section>
+  <section id="schema" class="panel hidden">
+    <h2 style="font-size:20px">Nine entities</h2>
+    <div class="ent">
+      <div><b>1. department</b>has many students, courses, faculty</div>
+      <div><b>2. student</b>belongs to a department</div>
+      <div><b>3. course</b>belongs to a department</div>
+      <div><b>4. faculty</b>belongs to a department</div>
+      <div><b>5. room</b>building, floor, capacity</div>
+      <div><b>6. time_slot</b>session and timings</div>
+      <div><b>7. exam</b>course + date + slot</div>
+      <div><b>8. invigilation</b>exam + room + faculty</div>
+      <div><b>9. seat_allocation</b>student + exam + room + seat</div>
+    </div>
+<pre>CREATE TABLE department (
+  dept_id INT PRIMARY KEY, dept_name VARCHAR(50) NOT NULL UNIQUE);
+
+CREATE TABLE student (
+  reg_no VARCHAR(15) PRIMARY KEY CHECK (reg_no REGEXP '^RA[0-9]{13}$'), name VARCHAR(60) NOT NULL,
+  semester INT NOT NULL, dept_id INT NOT NULL REFERENCES department(dept_id));
+
+CREATE TABLE course (
+  course_id INT PRIMARY KEY, code VARCHAR(10) UNIQUE NOT NULL,
+  title VARCHAR(80) NOT NULL, semester INT NOT NULL,
+  dept_id INT NOT NULL REFERENCES department(dept_id));
+
+CREATE TABLE faculty (
+  faculty_id INT PRIMARY KEY, name VARCHAR(60) NOT NULL,
+  dept_id INT NOT NULL REFERENCES department(dept_id));
+
+CREATE TABLE room (
+  room_id INT PRIMARY KEY, room_name VARCHAR(20) UNIQUE NOT NULL,
+  building VARCHAR(30) NOT NULL, floor INT NOT NULL, capacity INT NOT NULL);
+
+CREATE TABLE time_slot (
+  slot_id INT PRIMARY KEY, start_time TIME NOT NULL, end_time TIME NOT NULL);
+
+CREATE TABLE exam (
+  exam_id INT PRIMARY KEY AUTO_INCREMENT,
+  course_id INT NOT NULL UNIQUE REFERENCES course(course_id),
+  exam_date DATE NOT NULL,
+  slot_id INT NOT NULL REFERENCES time_slot(slot_id));
+
+CREATE TABLE invigilation (
+  exam_id INT NOT NULL REFERENCES exam(exam_id),
+  room_id INT NOT NULL REFERENCES room(room_id),
+  faculty_id INT NOT NULL REFERENCES faculty(faculty_id),
+  PRIMARY KEY (exam_id, room_id));
+
+CREATE TABLE seat_allocation (
+  exam_id INT NOT NULL REFERENCES exam(exam_id),
+  reg_no VARCHAR(15) NOT NULL REFERENCES student(reg_no),
+  room_id INT NOT NULL REFERENCES room(room_id),
+  seat_no INT NOT NULL,
+  PRIMARY KEY (exam_id, reg_no),
+  UNIQUE (exam_id, room_id, seat_no));</pre>
+    <p style="color:var(--muted)">The clash rules (one room or one invigilator per date and slot) need a trigger or application check, because date and slot live in <code>exam</code> while room and faculty live in <code>invigilation</code>. This demo runs those checks in JavaScript.</p>
+    <p style="margin:0">The query behind “Find my exam”:</p>
+<pre>SELECT c.code, c.title, e.exam_date, t.start_time, t.end_time,
+       r.building, r.floor, r.room_name, s.seat_no
+FROM seat_allocation s
+JOIN exam e ON e.exam_id = s.exam_id
+JOIN course c ON c.course_id = e.course_id
+JOIN time_slot t ON t.slot_id = e.slot_id
+JOIN room r ON r.room_id = s.room_id
+WHERE s.reg_no = 'RA2411003010001'
+ORDER BY e.exam_date, t.start_time;</pre>
+  </section>
+</main>
+<script src="script.js"></script>
+</body>
+</html>
